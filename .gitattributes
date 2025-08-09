@@ -1,13 +1,9 @@
-# SRTファイルの改行統一（Windows/macOSでの差分ズレを防止）
+* text=auto
 *.srt text eol=lf
 *.vtt text eol=lf
+*.py  text eol=lf
+*.yml text eol=lf
 
-# JSON改行統一
-*.json text eol=lf
-
-# Python改行統一
-*.py text eol=lf
-
-# Markdown改行統一
-*.md text eol=lf
-EOF < /dev/null
+audio/**  filter=lfs diff=lfs merge=lfs -text
+models/** filter=lfs diff=lfs merge=lfs -text
+ENDFILE < /dev/null
