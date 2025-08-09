@@ -8,12 +8,17 @@ CAPCUT ?= subs/0808.srt
 PEAKS   ?= reports/audio_peaks.json
 WHISPER ?= reports/whisper_medium.json
 
+# TTS補助機能（任意）
+GENAI_VOICE ?= Puck
+TTS_WAV     := audio/guide_tts.wav
+WH_TTS      := reports/whisper_tts.json
+
 OUT_TMP_SRT := subs/final_smart.srt
 OUT_TMP_VTT := subs/final_smart.vtt
 OUT_SRT     := subs/final_production.srt
 OUT_VTT     := subs/final_production.vtt
 
-.PHONY: prep smart finalize check smart-all
+.PHONY: prep smart finalize check smart-all tts tts-whisper smart-from-tts
 
 prep:
 	@mkdir -p audio subs reports scripts
@@ -44,3 +49,34 @@ check:
 
 smart-all: prep smart finalize check
 	@echo "🎯 DONE: $(OUT_SRT) / $(OUT_VTT)"
+
+# ========================================
+# TTS補助機能 - 既存パイプラインとは独立
+# ========================================
+
+tts: $(TTS_WAV)
+$(TTS_WAV): $(SCRIPT) scripts/tts_synthesize.py
+	@echo "🎤 TTS合成: $(SCRIPT) → $(TTS_WAV) (voice=$(GENAI_VOICE))"
+	$(PY) scripts/tts_synthesize.py \
+	  --text $(SCRIPT) \
+	  --out $(TTS_WAV) \
+	  --voice $(GENAI_VOICE)
+
+tts-whisper: $(WH_TTS)
+$(WH_TTS): $(TTS_WAV)
+	@echo "🎯 TTS音声をWhisperで解析: $(TTS_WAV) → $(WH_TTS)"
+	@command -v whisper-cli >/dev/null 2>&1 || (echo "❌ whisper-cli が見つかりません"; exit 1)
+	whisper-cli --model medium --language ja --output-json-full --output-file reports/whisper_tts $(TTS_WAV)
+
+# 実験用: TTSタイムラインを使った字幕生成（本番パイプラインとは別系統）
+smart-from-tts: $(PEAKS) $(WH_TTS) $(CAPCUT) $(SCRIPT)
+	@echo "🧪 実験: TTSタイムラインベース字幕生成"
+	$(PY) scripts/smart_subs.py \
+	  --audio_json $(PEAKS) \
+	  --whisper_json $(WH_TTS) \
+	  --capcut_srt $(CAPCUT) \
+	  --script $(SCRIPT) \
+	  --out subs/final_from_tts.srt \
+	  --out_vtt subs/final_from_tts.vtt
+	@echo "⚠️  注意: これはTTS由来のタイムラインなので本番音源と同期しません"
+	@echo "💡 本番用は 'make smart-all' を使用してください"

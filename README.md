@@ -145,6 +145,50 @@ python srtgen.py --audio video.wav --script script.txt --out subtitle.srt --devi
 python srtgen.py --audio video.wav --script script.txt --out subtitle.srt --model medium
 ```
 
+## 🎤 TTS補助機能（実験的）
+
+Gemini TTSを使った音声合成による補助機能を提供します。
+
+### 📋 用途
+
+1. **代替ナレーション**: 完全合成音声での納品
+2. **ガイド用TTS**: 理想的な文字タイムライン作成の補助
+3. **QA支援**: 台本通りの理想波形で品質検証
+
+### 🔧 依存関係
+
+```bash
+# Google Gemini AI SDK
+pip install google-genai
+
+# 環境変数設定
+export GEMINI_API_KEY="your_api_key_here"
+```
+
+### 🚀 使用方法
+
+```bash
+# 1. 台本からTTS音声生成
+make tts SCRIPT=script_4_2.txt GENAI_VOICE=Puck
+
+# 2. TTS音声をWhisperで解析
+make tts-whisper
+
+# 3. 実験: TTSタイムラインベース字幕（注意: 本番音源と非同期）
+make smart-from-tts
+```
+
+### ⚠️ 重要な注意
+
+- TTSは**補助機能**です。本番用は必ず `make smart-all` を使用
+- TTS由来の字幕は本番音源と同期しません
+- 品質検証・ガイド用途での利用を推奨
+
+### 🎙️ 利用可能音声
+
+- **Puck** (デフォルト): 標準的な日本語音声
+- **Zephyr**: 代替音声オプション
+
 ## 🛠️ 個別ツール使用
 
 ### Whisper強制アライメントのみ
