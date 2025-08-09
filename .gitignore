@@ -1,0 +1,81 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Temporary files
+temp_*.srt
+temp_*.vtt
+tail_*.srt
+*.pyc
+*.pyo
+
+# Generated subtitles (keep important ones, ignore temp)
+subs/tail_aligned.srt
+subs/demo_*.srt
+subs/demo_*.vtt
+subs/final_merged.srt
+subs/final_merged.vtt
+
+# Generated reports and CSVs
+reports/clips.csv
+
+# Audio files (keep originals, ignore generated)
+audio/tail.wav
+audio/voice.wav
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+
+# Model cache
+.cache/
+models/
+
+# Test outputs
+test_*.srt
+test_*.vtt
+demo_*.srt
+demo_*.json
+
+# Backup files
+*.bak
+*.backup
+*~

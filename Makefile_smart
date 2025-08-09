@@ -1,0 +1,46 @@
+# Makefile_smart - 既存JSONのみで統合→最終化→検証
+PY := python3
+
+AUDIO  ?= audio/4_2.wav
+SCRIPT ?= script_4_2.txt
+CAPCUT ?= subs/0808.srt
+
+PEAKS   ?= reports/audio_peaks.json
+WHISPER ?= reports/whisper_medium.json
+
+OUT_TMP_SRT := subs/final_smart.srt
+OUT_TMP_VTT := subs/final_smart.vtt
+OUT_SRT     := subs/final_production.srt
+OUT_VTT     := subs/final_production.vtt
+
+.PHONY: prep smart finalize check smart-all
+
+prep:
+	@mkdir -p audio subs reports scripts
+
+smart: $(OUT_TMP_SRT)
+$(OUT_TMP_SRT): $(PEAKS) $(WHISPER) $(CAPCUT) $(SCRIPT) scripts/smart_subs.py scripts/srt_rules.py
+	@test -f $(PEAKS)   || (echo "❌ $(PEAKS) missing (既存解析JSONが必要。再解析はしない)"; exit 1)
+	@test -f $(WHISPER) || (echo "❌ $(WHISPER) missing (既存ASR JSONが必要。再解析はしない)"; exit 1)
+	$(PY) scripts/smart_subs.py \
+	  --audio_json $(PEAKS) \
+	  --whisper_json $(WHISPER) \
+	  --capcut_srt $(CAPCUT) \
+	  --script $(SCRIPT) \
+	  --out $(OUT_TMP_SRT) \
+	  --out_vtt $(OUT_TMP_VTT)
+
+finalize: $(OUT_SRT)
+$(OUT_SRT): $(OUT_TMP_SRT) scripts/finalize_tail.py
+	$(PY) scripts/finalize_tail.py \
+	  --in $(OUT_TMP_SRT) \
+	  --audio $(AUDIO) \
+	  --out $(OUT_SRT) \
+	  --out_vtt $(OUT_VTT) \
+	  --target_offset_ms 20
+
+check:
+	$(PY) scripts/check_durations.py --audio $(AUDIO) --srt $(OUT_SRT)
+
+smart-all: prep smart finalize check
+	@echo "🎯 DONE: $(OUT_SRT) / $(OUT_VTT)"
