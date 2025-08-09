@@ -84,11 +84,29 @@ def main():
     last_end = max(c["end"] for c in cues)
     target = max(0.0, a - args.target_offset_ms/1000.0)
 
-    # 最後に到達しているキューを見つけクランプ
+    # 最後に到達しているキューを見つけ、双方向調整（短縮/伸長）
     idx = max(range(len(cues)), key=lambda i: cues[i]["end"])
-    span = max(MIN_DUR, cues[idx]["end"] - cues[idx]["start"])
-    cues[idx]["end"] = min(target, max(0.0, cues[idx]["end"]))
+    original_end = cues[idx]["end"]
+    original_start = cues[idx]["start"]
+    span = max(MIN_DUR, original_end - original_start)
+    
+    # targetまで伸ばす/縮める
+    cues[idx]["end"] = target
+    
+    # 最小長維持のためstartを調整
     cues[idx]["start"] = max(0.0, cues[idx]["end"] - span)
+    
+    # 前キューとの最小ギャップ0.12s維持
+    if idx > 0:
+        MIN_GAP = 0.12
+        prev_end = cues[idx-1]["end"]
+        if cues[idx]["start"] - prev_end < MIN_GAP:
+            # ギャップ不足の場合、startを前倒し
+            cues[idx]["start"] = prev_end + MIN_GAP
+            # spanを再計算して最小長確保
+            actual_span = cues[idx]["end"] - cues[idx]["start"]
+            if actual_span < MIN_DUR:
+                cues[idx]["end"] = cues[idx]["start"] + MIN_DUR
 
     Path(args.out).write_text(out_srt(cues), encoding="utf-8")
     Path(args.out_vtt).write_text(out_vtt(cues), encoding="utf-8")
