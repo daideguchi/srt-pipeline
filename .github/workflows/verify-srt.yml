@@ -9,23 +9,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt || echo "No requirements.txt found"
-          # Install ffprobe for audio duration check
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-      - name: Verify sync precision (≤ 0.050s)
+      - name: Verify sync (<= 0.050s) using JSON audio length
         run: |
           echo "🔍 Verifying subtitle synchronization precision..."
           python3 scripts/check_durations.py \
-            --audio audio/voice.wav \
+            --audio_json reports/audio_peaks.json \
             --srt subs/final_production.srt
           echo "✅ Sync verification completed"
       - name: Check quality standards

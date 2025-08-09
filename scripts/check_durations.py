@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # check_durations.py - オーディオとSRTの同期検証＋ルール違反報告
 
-import re, subprocess
+import re, subprocess, json
 from pathlib import Path
 from srt_rules import calc_cps
 
@@ -20,6 +20,13 @@ def audio_len(path):
     rc, out, err = run(["ffprobe","-v","error","-show_entries","format=duration","-of","default=nk=1:nw=1",str(path)])
     if rc != 0: raise RuntimeError(err)
     return float(out.strip())
+
+def audio_len_from_json(jpath):
+    data = json.loads(Path(jpath).read_text(encoding="utf-8"))
+    dur = data.get("duration")
+    if dur is None:
+        raise RuntimeError(f"'duration' not found in {jpath}")
+    return float(dur)
 
 def parse_srt(path):
     text = Path(path).read_text(encoding="utf-8")
@@ -43,11 +50,17 @@ def parse_srt(path):
 def main():
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument("--audio", required=True)
+    ap.add_argument("--audio", required=False, help="音声ファイル（ffprobe使用）")
+    ap.add_argument("--audio_json", required=False, help="audio_peaks.json（durationを使用）")
     ap.add_argument("--srt", required=True)
     args = ap.parse_args()
 
-    a = audio_len(args.audio)
+    if args.audio_json:
+        a = audio_len_from_json(args.audio_json)
+    elif args.audio:
+        a = audio_len(args.audio)
+    else:
+        raise SystemExit("❌ --audio か --audio_json のどちらかを指定してください。")
     cues = parse_srt(args.srt)
     if not cues:
         print("❌ No cues"); return
