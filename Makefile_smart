@@ -18,7 +18,7 @@ OUT_TMP_VTT := subs/final_smart.vtt
 OUT_SRT     := subs/final_production.srt
 OUT_VTT     := subs/final_production.vtt
 
-.PHONY: prep smart finalize check smart-all tts tts-whisper smart-from-tts
+.PHONY: prep smart finalize check smart-all tts tts-whisper smart-from-tts ci-verify
 
 prep:
 	@mkdir -p audio subs reports scripts
@@ -80,3 +80,11 @@ smart-from-tts: $(PEAKS) $(WH_TTS) $(CAPCUT) $(SCRIPT)
 	  --out_vtt subs/final_from_tts.vtt
 	@echo "⚠️  注意: これはTTS由来のタイムラインなので本番音源と同期しません"
 	@echo "💡 本番用は 'make smart-all' を使用してください"
+
+# ========================================
+# CI用検証（ローカル再現用）
+# ========================================
+
+ci-verify:
+	@echo "🔍 CI検証をローカルで再現"
+	$(PY) scripts/check_durations.py --audio_json reports/audio_peaks.json --srt $(OUT_SRT)

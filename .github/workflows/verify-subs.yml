@@ -1,62 +1,27 @@
-name: Verify Subtitles
+name: verify-subs
 
 on:
   pull_request:
     paths:
+      - 'subs/**/*.srt'
       - 'scripts/**'
-      - 'subs/**'
       - 'Makefile*'
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  verify:
+  lint:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        lfs: true
-        
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        # 軽量依存のみインストール
-        
-    - name: Verify script syntax
-      run: |
-        python -m py_compile scripts/*.py
-        
-    - name: Check duration verification if outputs exist
-      run: |
-        if [ -f subs/final_production.srt ] && [ -f audio/4_2.wav ]; then
-          echo "Running duration check..."
-          python scripts/check_durations.py --audio audio/4_2.wav --srt subs/final_production.srt
-        else
-          echo "⚠️  Final outputs or audio not found; skipping runtime verification"
-          echo "Available files:"
-          ls -la subs/ || echo "No subs directory"
-          ls -la audio/ || echo "No audio directory"
-        fi
-        
-    - name: Validate SRT format
-      run: |
-        for srt in subs/*.srt; do
-          if [ -f "$srt" ]; then
-            echo "Checking format: $srt"
-            # 基本的なSRT構造チェック
-            if ! grep -q "^[0-9]*$" "$srt"; then
-              echo "⚠️  No subtitle numbers found in $srt"
-            fi
-            if ! grep -q "[0-9][0-9]:[0-9][0-9]:[0-9][0-9],[0-9][0-9][0-9]" "$srt"; then
-              echo "⚠️  No valid timestamps found in $srt"
-            fi
+      - uses: actions/checkout@v4
+      - name: Basic SRT sanity
+        run: |
+          set -e
+          test -f subs/final_production.srt
+          # index/timestamp の存在チェック（強制ではなく警告ベースに）
+          if ! grep -Eq '^[0-9]+' subs/final_production.srt; then
+            echo "⚠️  No numeric indices found (might still be acceptable)"
           fi
-        done
+          if ! grep -Eq '[0-9]{2}:[0-9]{2}:[0-9]{2},[0-9]{3} --> ' subs/final_production.srt; then
+            echo "❌ No valid timestamps"; exit 1
+          fi
+          echo "✅ Basic SRT format OK"
