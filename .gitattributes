@@ -1,5 +1,13 @@
-# Git LFS settings for large files
-*.wav filter=lfs diff=lfs merge=lfs -text
-*.mp3 filter=lfs diff=lfs merge=lfs -text
-*.mp4 filter=lfs diff=lfs merge=lfs -text
-models/* filter=lfs diff=lfs merge=lfs -text
+# SRTファイルの改行統一（Windows/macOSでの差分ズレを防止）
+*.srt text eol=lf
+*.vtt text eol=lf
+
+# JSON改行統一
+*.json text eol=lf
+
+# Python改行統一
+*.py text eol=lf
+
+# Markdown改行統一
+*.md text eol=lf
+EOF < /dev/null
