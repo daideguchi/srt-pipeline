@@ -211,8 +211,13 @@ def distribute_text_over_capcut(script: str, capcut_cues: List[Dict[str,Any]], v
             else:
                 # 弱い句読点
                 m2 = re.search(r"[、，](?!.*[、，])", chunk)
-                # ★バグ修正済: tptr二重加算しない
-                cut = tptr + (m2.end() if m2 else len(chunk))
+                if m2:
+                    cut = tptr + m2.end()
+                else:
+                    # 末尾が英数/スペース/閉じカッコの場合は一歩手前で切る（見た目の崩れ防止）
+                    raw_cut = tptr + len(chunk)
+                    backoff = re.search(r"[A-Za-z0-9」』）\]\)]$", chunk)
+                    cut = raw_cut - 1 if backoff else raw_cut
 
             cut = max(cut, tptr+1)
             cut = min(cut, N)
@@ -257,6 +262,17 @@ def distribute_text_over_capcut(script: str, capcut_cues: List[Dict[str,Any]], v
                 out[j-1]["end"] -= shift
                 cur["start"] += shift
         j += 1
+
+    # 先頭の短尺を緩和（可能なら次キューから少し借りる）
+    if out:
+        d0 = out[0]["end"] - out[0]["start"]
+        need = max(0.0, MIN_DUR - d0)
+        if need > 0 and len(out) >= 2:
+            spare = max(0.0, (out[1]["start"] - out[0]["end"]) - MIN_GAP)
+            take = min(need, spare/2)  # 半分だけ動かす
+            if take > 0:
+                out[0]["end"] += take
+                out[1]["start"] -= take
 
     # レイアウト整形
     for c in out:
