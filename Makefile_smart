@@ -18,7 +18,7 @@ OUT_TMP_VTT := subs/final_smart.vtt
 OUT_SRT     := subs/final_production.srt
 OUT_VTT     := subs/final_production.vtt
 
-.PHONY: prep smart finalize check smart-all tts tts-whisper smart-from-tts ci-verify
+.PHONY: prep smart finalize check smart-all tts tts-whisper smart-from-tts ci-verify auto
 
 prep:
 	@mkdir -p audio subs reports scripts
@@ -88,3 +88,76 @@ smart-from-tts: $(PEAKS) $(WH_TTS) $(CAPCUT) $(SCRIPT)
 ci-verify:
 	@echo "🔍 CI検証をローカルで再現"
 	$(PY) scripts/check_durations.py --audio_json reports/audio_peaks.json --srt $(OUT_SRT)
+
+# ========================================
+# ワンコマンド処理（フォルダ内自動検出）
+# ========================================
+
+# 使い方:
+# make -f Makefile_smart auto \
+#   DIR=/abs/path/to/job \
+#   MODEL=models/ggml-medium.bin \
+#   ARCHIVE=archive \
+#   MODE=move \
+#   COMPRESS=0
+auto:
+	@mkdir -p subs reports
+	@python3 scripts/oneclick.py \
+		--dir "$(DIR)" \
+		--model "$(MODEL)" \
+		--silence_db -35 \
+		--min_silence_ms 220 \
+		--target_offset_ms 20 \
+		--tolerance 0.050 \
+		--out_prefix final_production \
+		--archive_root "$(ARCHIVE)" \
+		--archive_mode "$(MODE)" \
+		$(if $(filter 1,$(COMPRESS)),--compress)
+
+# ========================================
+# Clean up commands
+# ========================================
+
+.PHONY: clean clean-mid clean-hard prune-archives clean-job dry-run
+
+# 中間物（安全）
+clean-mid:
+	@echo "🧹 remove intermediates"
+	@rm -f subs/final_smart.srt subs/final_smart.vtt
+	@rm -f subs/final_from_tts.srt subs/final_from_tts.vtt
+	@rm -f subs/*.tmp.*
+	@rm -f audio/guide_tts.wav
+	@rm -f reports/whisper_tts.json
+	@find . -name "*.log" -delete -o -name "*.tmp" -delete -o -name "*.bak" -delete -o -name ".DS_Store" -delete
+
+# 成果物以外を広めに（本番SRT/VTT・モデル・archiveは残す）
+clean:
+	$(MAKE) clean-mid
+	@echo "🧹 keep: subs/final_production.*, models/*, archive/*"
+
+# さらに強い（成果物も消す）※実行注意
+clean-hard:
+	@echo "⚠️ remove ALL outputs (final included)"
+	@rm -f subs/final_production.srt subs/final_production.vtt
+	$(MAKE) clean-mid
+
+# 旧アーカイブの間引き：DAYS=30 など
+prune-archives:
+	@[ -n "$(DAYS)" ] || (echo "Usage: make prune-archives DAYS=30"; exit 1)
+	@echo "🧯 prune archives older than $(DAYS)d"
+	@find archive/success -type d -mtime +$(DAYS) -maxdepth 3 -print -exec rm -rf {} + 2>/dev/null || true
+	@find archive/failed  -type d -mtime +$(DAYS) -maxdepth 3 -print -exec rm -rf {} + 2>/dev/null || true
+
+# 任意ジョブフォルダを空に（成功後の残骸を掃除）
+clean-job:
+	@[ -n "$(DIR)" ] || (echo "Usage: make clean-job DIR=/path/to/job"; exit 1)
+	@echo "🧽 cleaning job dir: $(DIR)"
+	@find "$(DIR)" -type f -not -name ".keep" -print -delete 2>/dev/null || true
+
+# まずは様子見（何が消えるかだけ表示）
+dry-run:
+	@echo "🔎 would remove:"
+	@ls -la subs/final_smart.* subs/final_from_tts.* subs/*.tmp.* 2>/dev/null || echo "  (none)"
+	@ls -la audio/guide_tts.wav reports/whisper_tts.json 2>/dev/null || echo "  (none)"
+	@echo "🔎 find temp:"
+	@find . -name "*.log" -o -name "*.tmp" -o -name "*.bak" -o -name ".DS_Store" 2>/dev/null || echo "  (none)"

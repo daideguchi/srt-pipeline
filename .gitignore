@@ -79,3 +79,29 @@ demo_*.json
 *.bak
 *.backup
 *~
+
+# Intermediate files
+subs/final_smart.*
+subs/final_from_tts.*
+subs/*.tmp.*
+
+# Packages/archives
+*.zip
+*.tgz
+*.tar.gz
+
+# Media files (large)
+*.wav
+*.mp3
+*.m4a
+*.flac
+
+# Archives (optional - remove if tracking needed)
+# archive/
+
+# Examples/tests moved to examples/
+examples/
+
+# Delivery packages
+srt_subtitle_delivery_*
+srt-pipeline-review*
