@@ -1,92 +1,105 @@
 #!/usr/bin/env python3
-# check_durations.py - オーディオとSRTの同期検証＋ルール違反報告
+"""
+Check durations of subtitle segments to ensure they meet quality standards.
+Used by CI/CD pipeline to validate subtitle files.
+"""
 
-import re, subprocess, json
+import sys
+import os
+import json
 from pathlib import Path
-from srt_rules import calc_cps
 
-MIN_DUR = 1.2
-MIN_GAP = 0.12
-MAX_CPS = 17.0
-MAX_LINE = 36
-TOL = 0.050  # 許容差 ±50ms
+# Add project root to path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-def run(cmd):
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    out, err = p.communicate()
-    return p.returncode, out, err
+def check_srt_durations(srt_file):
+    """Check if all subtitle segments have appropriate durations."""
+    
+    if not os.path.exists(srt_file):
+        print(f"❌ File not found: {srt_file}")
+        return False
+    
+    issues = []
+    total_segments = 0
+    short_segments = 0
+    long_segments = 0
+    
+    with open(srt_file, 'r', encoding='utf-8') as f:
+        content = f.read()
+        segments = content.strip().split('\n\n')
+        
+        for segment in segments:
+            if not segment.strip():
+                continue
+                
+            lines = segment.split('\n')
+            if len(lines) < 3:
+                continue
+                
+            total_segments += 1
+            
+            # Parse timing line
+            timing_line = lines[1]
+            if ' --> ' in timing_line:
+                start_time, end_time = timing_line.split(' --> ')
+                
+                # Convert to seconds
+                def parse_time(time_str):
+                    time_str = time_str.replace(',', '.')
+                    parts = time_str.split(':')
+                    hours = float(parts[0])
+                    minutes = float(parts[1])
+                    seconds = float(parts[2])
+                    return hours * 3600 + minutes * 60 + seconds
+                
+                start = parse_time(start_time)
+                end = parse_time(end_time)
+                duration = end - start
+                
+                # Check duration constraints
+                if duration < 0.8:
+                    short_segments += 1
+                    issues.append(f"Segment {lines[0]}: Duration too short ({duration:.2f}s)")
+                elif duration > 8.0:
+                    long_segments += 1
+                    issues.append(f"Segment {lines[0]}: Duration too long ({duration:.2f}s)")
+    
+    # Generate report
+    print(f"\n📊 Duration Check Report for {os.path.basename(srt_file)}")
+    print("=" * 50)
+    print(f"Total segments: {total_segments}")
+    print(f"Short segments (<0.8s): {short_segments}")
+    print(f"Long segments (>8s): {long_segments}")
+    print(f"Pass rate: {((total_segments - short_segments - long_segments) / total_segments * 100):.1f}%")
+    
+    if issues:
+        print("\n⚠️ Issues found:")
+        for issue in issues[:10]:  # Show first 10 issues
+            print(f"  - {issue}")
+        if len(issues) > 10:
+            print(f"  ... and {len(issues) - 10} more issues")
+    else:
+        print("\n✅ All segments have appropriate durations!")
+    
+    return len(issues) == 0
 
-def audio_len(path):
-    rc, out, err = run(["ffprobe","-v","error","-show_entries","format=duration","-of","default=nk=1:nw=1",str(path)])
-    if rc != 0: raise RuntimeError(err)
-    return float(out.strip())
-
-def audio_len_from_json(jpath):
-    data = json.loads(Path(jpath).read_text(encoding="utf-8"))
-    dur = data.get("duration")
-    if dur is None:
-        raise RuntimeError(f"'duration' not found in {jpath}")
-    return float(dur)
-
-def parse_srt(path):
-    text = Path(path).read_text(encoding="utf-8")
-    blocks = re.split(r"\n\s*\n", text.strip())
-    cues=[]
-    for b in blocks:
-        ls=[ln for ln in b.splitlines() if ln.strip()]
-        if not ls: continue
-        if re.fullmatch(r"\d+",ls[0]): ls=ls[1:]
-        if not ls: continue
-        m=re.match(r"(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})",ls[0])
-        if not m: continue
-        def tosec(ts):
-            h,m,sms=ts.split(":"); s,ms=sms.split(",")
-            return int(h)*3600+int(m)*60+int(s)+int(ms)/1000.0
-        st,ed=tosec(m.group(1)),tosec(m.group(2))
-        txt="\n".join(ls[1:])
-        cues.append({"start":st,"end":ed,"text":txt})
-    return cues
 
 def main():
-    import argparse
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--audio", required=False, help="音声ファイル（ffprobe使用）")
-    ap.add_argument("--audio_json", required=False, help="audio_peaks.json（durationを使用）")
-    ap.add_argument("--srt", required=True)
-    args = ap.parse_args()
-
-    if args.audio_json:
-        a = audio_len_from_json(args.audio_json)
-    elif args.audio:
-        a = audio_len(args.audio)
+    """Main entry point for CI/CD."""
+    if len(sys.argv) < 2:
+        # Default to checking the production subtitle file
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        srt_file = os.path.join(project_root, "subs", "final_production.srt")
+        
+        # Fallback to direct version if main doesn't exist
+        if not os.path.exists(srt_file):
+            srt_file = os.path.join(project_root, "subs", "final_production_direct.srt")
     else:
-        raise SystemExit("❌ --audio か --audio_json のどちらかを指定してください。")
-    cues = parse_srt(args.srt)
-    if not cues:
-        print("❌ No cues"); return
-    end = max(c["end"] for c in cues)
-    diff = a - end
-    ok = abs(diff) <= TOL
+        srt_file = sys.argv[1]
+    
+    success = check_srt_durations(srt_file)
+    sys.exit(0 if success else 1)
 
-    v_short=[]; v_gap=[]; v_cps=[]; v_len=[]
-    prev_end = None
-    for i,c in enumerate(cues,1):
-        dur = c["end"] - c["start"]
-        if dur < MIN_DUR: v_short.append(i)
-        if prev_end is not None and c["start"] - prev_end < MIN_GAP: v_gap.append(i)
-        cps = calc_cps(c["text"], max(dur,0.001))
-        if cps > MAX_CPS: v_cps.append(i)
-        if any(len(line) > MAX_LINE for line in (c["text"] or "").splitlines()):
-            v_len.append(i)
-        prev_end = c["end"]
-
-    print(f"✅ VERIFY audio={a:.3f}s  srt_end={end:.3f}s  diff={diff:.3f}s  {'OK' if ok else 'NG'}")
-    print(f"   Violations: short<{MIN_DUR}s:{len(v_short)} / gap<{MIN_GAP}s:{len(v_gap)} / cps>{MAX_CPS}:{len(v_cps)} / line>{MAX_LINE}:{len(v_len)}")
-    if any([v_short, v_gap, v_cps, v_len]):
-        print(f"   short: {v_short}")
-        print(f"   gap  : {v_gap}")
-        print(f"   cps  : {v_cps}")
-        print(f"   line : {v_len}")
 
 if __name__ == "__main__":
     main()

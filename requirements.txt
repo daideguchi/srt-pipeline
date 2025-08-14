@@ -1,2 +1,16 @@
-google-genai>=0.3.0
-EOF < /dev/null
+numpy>=1.23
+python-dateutil>=2.8
+unicodedata2>=15.1; platform_system=="Windows"
+
+# STT engines (install what you need)
+faster-whisper>=1.0.0
+stable-ts>=2.12.0
+stable-whisper>=2.0.0
+openai-whisper>=20231117
+
+# Google Cloud STT (optional)
+google-cloud-speech>=2.24.0
+
+# Audio utils (optional helpers)
+pydub>=0.25.1
+soundfile>=0.12.1
