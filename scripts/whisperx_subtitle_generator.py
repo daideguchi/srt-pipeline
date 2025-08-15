@@ -186,6 +186,89 @@ def normalize_text_ja(s: str) -> str:
     return s
 
 
+def improve_japanese_line_breaks(text: str, max_chars_per_line: int = 36) -> str:
+    """
+    Filmora-level Japanese line breaking algorithm.
+    
+    Improvement over current CapCut-style single line approach:
+    1. Split quoted speech naturally ("「...」「...」" -> two lines)
+    2. Break at punctuation marks (。、！？)
+    3. Avoid breaking at particles (は、が、を、に、で、と)
+    4. Optimize for 2-line visual balance
+    """
+    text = text.strip()
+    
+    # Handle multiple quoted speeches first
+    # Pattern: "「...」「...」" should become two lines
+    quote_pattern = r'「([^」]+)」\s*「([^」]+)」'
+    quote_match = re.search(quote_pattern, text)
+    if quote_match:
+        line1 = f"「{quote_match.group(1)}」"
+        line2 = f"「{quote_match.group(2)}」"
+        # Remove the trailing period if present
+        remaining = text[quote_match.end():].strip()
+        if remaining and remaining != "。":
+            line2 += remaining
+        return line1 + "\n" + line2
+    
+    # If text is short enough for single line, keep it
+    if len(text) <= max_chars_per_line:
+        return text
+    
+    # Split at natural punctuation boundaries
+    # Priority: 。> ！？ > 、> other
+    split_chars = ['。', '！', '？', '、']
+    
+    for split_char in split_chars:
+        parts = text.split(split_char)
+        if len(parts) > 1:
+            # Try to create balanced lines
+            best_split = None
+            best_balance = float('inf')
+            
+            for i in range(1, len(parts)):
+                line1 = split_char.join(parts[:i]) + split_char
+                line2 = split_char.join(parts[i:])
+                
+                # Skip if either line is too long
+                if len(line1) > max_chars_per_line or len(line2) > max_chars_per_line:
+                    continue
+                
+                # Calculate balance score (prefer similar lengths)
+                balance = abs(len(line1) - len(line2))
+                if balance < best_balance:
+                    best_balance = balance
+                    best_split = (line1, line2)
+            
+            if best_split:
+                return best_split[0] + "\n" + best_split[1].strip()
+    
+    # Fallback: split at middle avoiding particles
+    particles = ['は', 'が', 'を', 'に', 'で', 'と', 'から', 'まで', 'より']
+    mid = len(text) // 2
+    
+    # Find best split point near middle
+    for offset in range(10):  # Search within ±10 characters
+        for direction in [1, -1]:
+            pos = mid + direction * offset
+            if 0 < pos < len(text):
+                char_before = text[pos-1]
+                char_at = text[pos]
+                
+                # Avoid splitting at particles
+                if char_before not in particles and char_at not in particles:
+                    line1 = text[:pos].strip()
+                    line2 = text[pos:].strip()
+                    
+                    if len(line1) <= max_chars_per_line and len(line2) <= max_chars_per_line:
+                        return line1 + "\n" + line2
+    
+    # Last resort: simple character count split
+    line1 = text[:max_chars_per_line].strip()
+    line2 = text[max_chars_per_line:].strip()
+    return line1 + "\n" + line2
+
+
 def build_normalized_wx_stream(wx_chars: List[WxChar]) -> Tuple[str, List[Tuple[int, int]]]:
     """Build normalized WhisperX stream with character index mapping."""
     norm_chars: List[str] = []
@@ -362,11 +445,14 @@ def apply_duration_aware_whisperx_timing(
         if final_end - final_start < min_duration:
             final_end = final_start + min_duration
         
+        # Apply Filmora-level line breaking improvement
+        improved_text = improve_japanese_line_breaks(seg.text)
+        
         result_segments.append(SRTSegment(
             index=seg.index,
             start=final_start,
             end=final_end,
-            text=seg.text
+            text=improved_text
         ))
     
     # DURATION-AWARE overlap resolution: ensure no segment is too short
