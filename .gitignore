@@ -25,6 +25,14 @@ MANIFEST
 venv/
 env/
 ENV/
+whisperx_env/
+
+# Environment Variables & Secrets
+.env
+.env.*
+*.key
+config.ini
+secrets.json
 
 # Temporary files
 temp_*.srt
